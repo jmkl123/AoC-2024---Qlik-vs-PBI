@@ -1,0 +1,35 @@
+//Import
+Input:
+LOAD
+    @1 as ValueA,
+    @2 as ValueB
+FROM [lib://AoC/Day1/Input1.txt]
+(txt, utf8, no labels, delimiter is spaces, msq); //Lesson Learned: You can not use Order By for csv/txt.
+
+
+
+//Get frequency of Values in List B and add it to the Input
+left join(Input)
+load
+	ValueB as ValueA,
+    count(ValueB) as Frequency //sum(1) works the same, but might be faster for very, very, very large datasets
+Resident Input
+group by ValueB;
+
+
+
+//Calculate similarity score
+Output:
+load *, ValueA * Frequency as SimilarityScore resident Input;
+
+drop table Input;
+//We could stop here and just use sum(SimilarityScore) as a KPI on the frontend.
+
+
+
+//Get result as a value in the datamodel
+Result:
+load sum(SimilarityScore) as Result Resident Output //to avoid an extra load statement this could have been done as a preceeding load for the Output table.
+group by;
+
+drop table Output;
