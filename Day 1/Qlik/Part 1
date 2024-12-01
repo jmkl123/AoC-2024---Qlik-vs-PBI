@@ -1,0 +1,45 @@
+//Import
+Input:
+LOAD
+    @1 as ValueA,
+    @2 as ValueB
+FROM [lib://AoC/Day1/Input1.txt]
+(txt, utf8, no labels, delimiter is spaces, msq); //Lesson Learned: You can not use Order By for csv/txt.
+
+
+
+//Sort Data and match it
+SortedData:
+load
+	rowno() as Position,
+    ValueA Resident Input
+order by ValueA asc;
+
+
+left join(SortedData)
+load
+	rowno() as Position,
+    ValueB Resident Input
+order by ValueB asc;
+
+drop table Input;
+
+
+
+//Calculate the delta:
+Output:
+Load
+	fabs(ValueA - ValueB) as Delta
+Resident SortedData;
+
+drop table SortedData;
+//We could stop here and just use sum(Delta) as a KPI on the frontend.
+
+
+
+//Get result as a value in the datamodel
+Result:
+load sum(Delta) as Result Resident Output
+group by;
+
+drop table Output;
