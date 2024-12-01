@@ -39,7 +39,7 @@ drop table SortedData;
 
 //Get result as a value in the datamodel
 Result:
-load sum(Delta) as Result Resident Output
+load sum(Delta) as Result Resident Output //to avoid an extra load statement this could have been done as a preceeding load for the Output table.
 group by;
 
 drop table Output;
