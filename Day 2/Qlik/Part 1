@@ -60,7 +60,7 @@ load
     //This is the todays trick. If all steps are increase or decrease the average has to be 1 or 2.
     //If they mix, the average will be in between and therefore the report is unsafe
     avg(IncreaseDecreaseMarker) as IncreaseDecreaseHelper,
-    //Same logic aplies for steps between levels. If the average is 1 all steps are safe.
+    //Same logic applies for steps between levels. If the average is 1 all steps are safe.
     //As soon there is one step that was unsafe, the average will be bigger than 1.
     avg(SafeStepMarker) as AllStepsSafeHelper
 Resident CheckedData
