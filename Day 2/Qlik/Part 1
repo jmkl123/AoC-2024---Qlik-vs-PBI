@@ -1,0 +1,87 @@
+//Import
+Input:
+LOAD
+	rowno() as ReportID,
+    @1 as 1,
+    @2 as 2,
+    @3 as 3,
+    @4 as 4,
+    @5 as 5,
+    @6 as 6,
+    @7 as 7,
+    @8 as 8
+FROM [lib://AoC/Day2/Input1.txt]
+(txt, utf8, no labels, delimiter is spaces, msq);
+
+
+
+//Convert it in structured data
+StructuredData:
+CrossTable(LevelID, Value,1)
+load * Resident Input;
+
+drop table Input;
+
+
+//Apply the checks
+CheckedData:
+load
+	*,
+    if(
+    	ReportID <> Peek('ReportID'),
+        null(),
+    	if(
+        	Value < Peek('Value'),
+            1,	//We define 1 as decrease
+            2	//We define 2 as increase
+        )
+    ) as IncreaseDecreaseMarker,
+    if(
+    	ReportID <> Peek('ReportID'),
+        null(),
+    	if(
+        	    fabs(Value - Peek('Value')) >=1
+            AND fabs(Value - Peek('Value')) <= 3,
+            1,	//We define 1 as safe
+            2	//We define 2 as unsafe
+        )
+    ) as SafeStepMarker
+Resident StructuredData
+where len(Value)>0; //not all Report have the same amount of levels. We remove empty lines. As the Input is TXT empty lines did not become null but where actually empty.
+
+drop table StructuredData;
+
+
+
+//Group by Report
+ReportData:
+load
+	ReportID,
+    //This is the todays trick. If all steps are increase or decrease the average has to be 1 or 2.
+    //If they mix, the average will be in between and therefore the report is unsafe
+    avg(IncreaseDecreaseMarker) as IncreaseDecreaseHelper,
+    //Same logic aplies for steps between levels. If the average is 1 all steps are safe.
+    //As soon there is one step that was unsafe, the average will be bigger than 1.
+    avg(SafeStepMarker) as AllStepsSafeHelper
+Resident CheckedData
+group by ReportID;
+
+drop table CheckedData;
+
+
+//We could stop here and do the rest on the frontend by settings filters to safe report or using set analysis and just count(ReportID).
+
+
+
+//Results
+Results:
+load
+	count(ReportID) as Result
+Resident ReportData
+where
+	match(IncreaseDecreaseHelper, 1, 2)
+    AND AllStepsSafeHelper = 1
+Group by;
+
+drop Table ReportData;
+
