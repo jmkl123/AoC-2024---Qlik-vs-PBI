@@ -1,0 +1,134 @@
+//Import
+Input:
+LOAD
+	rowno() as ReportID,
+    @1 as 1,
+    @2 as 2,
+    @3 as 3,
+    @4 as 4,
+    @5 as 5,
+    @6 as 6,
+    @7 as 7,
+    @8 as 8
+FROM [lib://AoC/Day2/Input1.txt]
+(txt, utf8, no labels, delimiter is spaces, msq);
+
+
+
+//Convert it in structured data
+StructuredData:
+CrossTable(LevelID, Value,2)
+load
+	'Original' as Variation,
+    *
+Resident Input;
+
+drop table Input;
+
+
+//We add generate all possible report variations. Each report variaten ignores one field.
+for i = 1 to 8
+
+	Variations:
+    load
+    	'Variation excl. $(i)' as Variation,
+        ReportID,
+        LevelID,
+        Value,
+        1 as temp	//this is a funny thing in Qlik: Qlik does to auto-concatination of tables that have the exact same fields. We want this here to add all Variations in one table. But the Input table has the same fields. And we want to avoid a autocontination at this point. Therefore we add a temporary dummy field.
+    Resident StructuredData
+    where LevelID <> $(i);
+    
+next i;
+
+
+//After all Variations are generated we add them to the original table to apply the same logic as in Part 1 to all variations
+drop field temp;
+
+Concatenate(StructuredData)
+load * Resident Variations;
+
+drop table Variations;
+
+
+//Apply the checks
+CheckedData:
+load
+	*,
+    if(
+    	ReportID <> Peek('ReportID'),
+        null(),
+    	if(
+        	Value < Peek('Value'),
+            1,	//We define 1 as decrease
+            2	//We define 2 as increase
+        )
+    ) as IncreaseDecreaseMarker,
+    if(
+    	ReportID <> Peek('ReportID'),
+        null(),
+    	if(
+        	    fabs(Value - Peek('Value')) >=1
+            AND fabs(Value - Peek('Value')) <= 3,
+            1,	//We define 1 as safe
+            2	//We define 2 as unsafe
+        )
+    ) as SafeStepMarker
+Resident StructuredData
+where len(Value)>0; //not all Report have the same amount of levels. We remove empty lines. As the Input is TXT empty lines did not become null but where actually empty.
+
+drop table StructuredData;
+
+
+
+//Group by Report and make validation
+ReportData:
+load
+	ReportID,
+    Variation,
+	if(
+    	match(IncreaseDecreaseHelper, 1, 2)
+    	AND AllStepsSafeHelper = 1,
+        1,	//We define 1 as safe
+        2	//We define 2 as unsafe
+    ) as ReportVariationResult;
+load
+	ReportID,
+    Variation,
+    //This is the todays trick. If all steps are increase or decrease the average has to be 1 or 2.
+    //If they mix, the average will be in between and therefore the report is unsafe
+    avg(IncreaseDecreaseMarker) as IncreaseDecreaseHelper,
+    //Same logic aplies for steps between levels. If the average is 1 all steps are safe.
+    //As soon there is one step that was unsafe, the average will be bigger than 1.
+    avg(SafeStepMarker) as AllStepsSafeHelper
+Resident CheckedData
+group by ReportID, Variation;
+
+drop table CheckedData;
+
+
+//We could stop here and do the rest on the frontend by settings filters to safe report or using set analysis and just count(ReportID).
+
+
+
+//ReportResults
+ReportResults:
+load
+	ReportID,
+    if(min(ReportVariationResult) = 1,1,2) as ReportResult
+Resident ReportData
+Group by ReportID;
+
+drop Table ReportData;
+
+
+//Results
+Results:
+load
+	count(ReportID) as Result
+Resident ReportResults
+where ReportResult = 1;
+
+drop table ReportResults;
+	
+
