@@ -107,9 +107,6 @@ group by ReportID, Variation;
 drop table CheckedData;
 
 
-//We could stop here and do the rest on the frontend by settings filters to safe report or using set analysis and just count(ReportID).
-
-
 
 //ReportResults
 ReportResults:
