@@ -1,0 +1,121 @@
+//Import
+Input:
+LOAD
+    rowno() as Order,
+    @1 as Input
+FROM [lib://AoC/Day3/Input.txt]
+(txt, codepage is 28592, no labels, delimiter is '\t', msq);
+
+
+
+// with do() and don't() logic beeing applied across line-breaks, we need to make the input one line so our subfield approach works
+InputCombined:
+load PurgeChar(Concat(Input,'',Order),chr(10)) as InputCombined //we need to use the order as a third parameter to concatenate the lines in the right order. otherwise a do() or don'() before a linebreak enables or disables the wrong multiplikations
+Resident Input
+group by;
+
+drop table Input;
+
+
+
+//This solution is dirty - but Artur said "what works wins".
+//We will use subfield later to split at do() and don't(). The problem is that the splitting element (do() and don't()) get eliminiated
+//and we do not know which lines to keep and which lines to remove.
+//there we add artificial strings that will be the beginning of the lines after splitting.
+InputAdjusted:
+Load
+	replace(replace(InputCombined,'do()','do()$$AoCDoIt'),'don' & chr(39) & 't()','dont()$$AoCDontDoIt') as InputAdjusted //we use the chance to get rid of the annoying ' in don't()
+Resident InputCombined;
+
+drop table InputCombined;
+
+
+//Split the string to start with do
+Dos:
+load
+	subfield(InputAdjusted,'do()') as DoSplit
+Resident InputAdjusted;
+
+drop table InputAdjusted;
+
+
+
+//Do further splitting with dont()  (former don't) so that every line starts with do or don't
+DosAndDonts:
+load
+	subfield(DoSplit, 'dont()' ) as DoAndDontSplit
+Resident Dos;
+
+drop table Dos;
+
+
+test:
+NoConcatenate
+load DoAndDontSplit
+Resident DosAndDonts
+where left(DoAndDontSplit,13) <> '$$AoCDontDoIt';
+
+drop Table DosAndDonts;
+rename table test to DosAndDonts;
+
+
+
+//There rest of the script is the same as in Part 1 only that we have to use a where-statement to get rid of the dont() lines
+//Split the string to create one line per multiplicatoin
+OneMulPerLine:
+load
+	subfield(DoAndDontSplit,'mul(') as Mul
+Resident DosAndDonts
+where left(DoAndDontSplit,13) <> '$$AoCDontDoIt';
+
+drop table DosAndDonts;
+
+//You need to know, that if you omit the third parameter of the subfield expression, qlik keeps all the subfields and generates one new line per subfield
+//With this approach we can be sure, that every line has (better said: had) the correct 'mul(' start.
+
+
+
+//Next we only need to keep the part that is in front of the first ')' occurance
+BeforeBracket:
+load
+	subfield(Mul,')',1) as InnerPart //this time we need the third parameter to only keep the first subfield and not generate new lines
+Resident OneMulPerLine;
+
+drop table OneMulPerLine;
+
+
+
+//now we only want to keep data that has only numbers and a coma:
+Innerpart_ValidChars:
+Load
+	InnerPart as InnerPart_ValidChars
+Resident BeforeBracket
+where len(InnerPart) = len(keepchar(InnerPart,'0123456789,'));
+
+drop table BeforeBracket;
+
+
+//now we have to multiply all pairs, that match the rule of maximum 3 digits per number:
+ResultPerMul:
+load
+	rowno() as ID, InnerPart_ValidChars, subfield(InnerPart_ValidChars,',',1) , subfield(InnerPart_ValidChars,',',2),
+
+	subfield(InnerPart_ValidChars,',',1) * subfield(InnerPart_ValidChars,',',2) as MulResult
+Resident Innerpart_ValidChars
+where
+	len(subfield(InnerPart_ValidChars,',',1)) <= 3
+	AND len(subfield(InnerPart_ValidChars,',',2)) <= 3;
+    
+drop table Innerpart_ValidChars;
+    
+// exit script;
+    
+    
+//Once again we could now sum it up in the frontend, but we will use aggregate to get the result in the model
+Results:
+load
+	sum(MulResult) as Result
+Resident ResultPerMul
+Group by;
+
+drop Table ResultPerMul;
