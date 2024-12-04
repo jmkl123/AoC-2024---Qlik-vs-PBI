@@ -1,0 +1,118 @@
+Input:
+LOAD
+	rowno() as Row,
+    @1 as Value
+FROM [lib://AoC/Day4/Input.txt]
+(txt, utf8, no labels, delimiter is ';', msq);
+
+
+
+let vNumberOfColumns = len(peek('Value'));
+let vNumberOfRows = NoOfRows('Input');
+
+// HINT: This approach only works if the number of columns is a multiple of 4 (which it is in this insput).
+// If the input had a number of columns that was not dividable by 4 we would have to add empty fake columns at the end.
+
+
+
+//We need all Rows to join the different columns in the next step
+InputAsTable:
+load Row Resident Input;
+
+
+
+//We want to have one letter per Column.
+For i = 1 to $(vNumberOfColumns)
+
+	left join(InputAsTable)
+	load
+    	Row,
+		mid(Value,$(i),1) as $(i)
+    Resident Input;
+
+next;
+
+drop table Input;
+
+
+
+//We will now split the table in rolling 4x4 blocks
+For r = 1 to $(vNumberOfRows)
+	For c = 1 to $(vNumberOfColumns)-3
+    
+    let vField1 = $(c);
+    let vField2 = $(c)+1;
+    let vField3 = $(c)+2;
+    let vField4 = $(c)+3;    
+
+    Blocks:
+    load
+    	'$(r),$(c)' as OriginalPosition,
+        Row,
+    	[$(vField1)] as 1,
+    	[$(vField2)] as 2,
+    	[$(vField3)] as 3,
+    	[$(vField4)] as 4
+    Resident InputAsTable
+    where
+    	Row >= $(r)
+        AND Row <= $(r)+3;
+     
+    next c
+next r;
+
+
+drop table InputAsTable;
+
+
+
+//Now we need to check every block for all 24 possible XMAS
+for each vBlock in FieldValueList('OriginalPosition')
+
+	Trace 'Evaluating Block: $(vBlock)';
+
+	SingleBlockResult:
+    load
+    	OriginalPosition,
+        [1],
+        [2],
+        [3],
+        [4],
+        //We are generating our blocks by moving them along the x and y axis, that means that rows and will occure in 4 instead of one block. we must only count one occurance. so we only count if the row or column of the OriginalPosition can be devided by 4
+        if(match([1] & [2] & [3] & [4], 'XMAS', 'SAMX') AND mod((subfield(OriginalPosition,',',1) + 3),4) = 0,1,0) as IsInRow, 
+        if(match([1] & Peek('1',-1) & Peek('1',-2) & Peek('1',-3), 'XMAS', 'SAMX') AND mod((subfield(OriginalPosition,',',-1) + 3),4) = 0,1,0) as IsInColumn1,
+        if(match([2] & Peek('2',-1) & Peek('2',-2) & Peek('2',-3), 'XMAS', 'SAMX') AND mod((subfield(OriginalPosition,',',-1) + 3),4) = 0,1,0) as IsInColumn2,
+        if(match([3] & Peek('3',-1) & Peek('3',-2) & Peek('3',-3), 'XMAS', 'SAMX') AND mod((subfield(OriginalPosition,',',-1) + 3),4) = 0,1,0) as IsInColumn3,
+        if(match([4] & Peek('4',-1) & Peek('4',-2) & Peek('4',-3), 'XMAS', 'SAMX') AND mod((subfield(OriginalPosition,',',-1) + 3),4) = 0,1,0) as IsInColumn4,
+        if(match([1] & Peek('2',-1) & Peek('3',-2) & Peek('4',-3), 'XMAS', 'SAMX') ,1,0) as IsDiagonalLeftToRight,
+        [1] & Peek('2',-1) & Peek('3',-2) & Peek('4',-3) as DiagonalLeftToRight,
+        if(match([4] & Peek('3',-1) & Peek('2',-2) & Peek('1',-3), 'XMAS', 'SAMX'),1,0) as IsDiagonalRightToLeft,
+        [4] & Peek('3',-1) & Peek('2',-2) & Peek('1',-3) as DiagonalRightToLeft
+    Resident Blocks
+    where OriginalPosition = '$(vBlock)';
+    
+    
+    AllBlockResults:
+    load
+    	OriginalPosition,
+        IsInRow + IsInColumn1 + IsInColumn2 + IsInColumn3 + IsInColumn4 + IsDiagonalLeftToRight + IsDiagonalRightToLeft as BlockResult
+    Resident SingleBlockResult;
+    
+    drop table SingleBlockResult; //It is important to drop this table every time to avoid that peek() is getting data from other blocks that were loaded earlier
+    
+
+next vBlock;
+
+drop table Blocks;
+
+
+
+//Result
+Result:
+load
+	sum(BlockResult) as Result
+Resident AllBlockResults
+group by;
+
+drop table AllBlockResults;
+
