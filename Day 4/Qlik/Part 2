@@ -1,0 +1,107 @@
+// HINT: This approach only works if the number of columns is a multiple of 3.
+// The Input has 140 columns. Therefore we have to add one fake character to make it a multiple of 3.
+
+Input:
+LOAD
+	rowno() as Row,
+    @1 & 'F' as Value
+FROM [lib://AoC/Day4/Input.txt]
+(txt, utf8, no labels, delimiter is ';', msq);
+
+
+
+let vNumberOfColumns = len(peek('Value'));
+let vNumberOfRows = NoOfRows('Input');
+
+
+
+//We need all Rows to join the different columns in the next step
+InputAsTable:
+load Row Resident Input;
+
+
+
+//We want to have one letter per Column.
+For i = 1 to $(vNumberOfColumns)
+
+	left join(InputAsTable)
+	load
+    	Row,
+		mid(Value,$(i),1) as $(i)
+    Resident Input;
+
+next;
+
+drop table Input;
+
+
+
+//We will now split the table in rolling 3x3 blocks
+For r = 1 to $(vNumberOfRows)
+	For c = 1 to $(vNumberOfColumns)-2
+    
+    let vField1 = $(c);
+    let vField2 = $(c)+1;
+    let vField3 = $(c)+2;   
+
+    Blocks:
+    load
+    	'$(r),$(c)' as OriginalPosition,
+        Row,
+    	[$(vField1)] as 1,
+    	[$(vField2)] as 2,
+    	[$(vField3)] as 3
+    Resident InputAsTable
+    where
+    	Row >= $(r)
+        AND Row <= $(r)+2;
+     
+    next c
+next r;
+
+
+drop table InputAsTable;
+
+
+
+//Now we need to check every block for all 24 possible XMAS
+for each vBlock in FieldValueList('OriginalPosition')
+
+	Trace 'Evaluating Block: $(vBlock)';
+
+	SingleBlockResult:
+    load
+    	OriginalPosition,
+        [1],
+        [2],
+        [3],
+		if(match([1] & Peek('2',-1) & Peek('3',-2), 'MAS', 'SAM') ,1,0) as IsDiagonalLeftToRight,
+        if(match([3] & Peek('2',-1) & Peek('1',-2), 'MAS', 'SAM') ,1,0) as IsDiagonalRightToLeft
+    Resident Blocks
+    where OriginalPosition = '$(vBlock)';
+    
+    
+    AllBlockResults:
+    load
+    	OriginalPosition,
+        if(IsDiagonalLeftToRight = 1 AND IsDiagonalRightToLeft = 1, 1, 0) as BlockResult
+    Resident SingleBlockResult;
+    
+    drop table SingleBlockResult; //It is important to drop this table every time to avoid that peek() is getting data from other blocks that were loaded earlier
+    
+
+next vBlock;
+
+drop table Blocks;
+
+
+
+//Result
+Result:
+load
+	sum(BlockResult) as Result
+Resident AllBlockResults
+group by;
+
+drop table AllBlockResults;
+
