@@ -1,0 +1,118 @@
+//Import
+//We load Rules and Updates in different tables
+Rules:
+LOAD
+    @1 as Rule
+FROM [lib://AoC/Day5/Input.txt]
+(txt, utf8, no labels, delimiter is '\t', msq)
+where wildmatch(@1,'*|*');
+
+
+Updates:
+LOAD
+    rowno() as UpdateID,
+    @1 as UpdateContent,
+    SubStringCount(@1,',') + 1 as UpdatePages
+FROM [lib://AoC/Day5/Input.txt]
+(txt, utf8, no labels, delimiter is '\t', msq)
+where wildmatch(@1,'*,*');
+
+
+//We need to identify the middle page of the update.
+Updates2:
+load
+	*,
+	subfield(UpdateContent,',',ceil(UpdatePages/2)) as MiddlePage
+Resident Updates;
+
+drop table Updates;
+Rename table Updates2 to Updates;
+
+
+
+//We need to know how many pages the biggest update has, so that the following loops can often enough
+MaxUpdatePages:
+load
+	max(UpdatePages) as MaxUpdatePages
+Resident Updates
+group by;
+
+let vMaxUpdatePages = peek('MaxUpdatePages');
+drop field UpdatePages;
+drop table MaxUpdatePages;
+
+
+
+//Convert Updates in all the combinations that must be checked
+for i = 1 to $(vMaxUpdatePages)
+
+    UpdateChecks:
+    load
+        UpdateID,
+        subfield(UpdateContent,',',$(i)) as RulePart1,
+        subfield(UpdateContent,',',$(i)+IterNo()) as RulePart2
+    Resident Updates
+    while iterno() <= $(vMaxUpdatePages)-1;
+
+next i;
+
+
+
+//As not all updates have the same length, wie produced some non-necessary checks (null values)
+//We wil get rid of them and combine the Rule Parts to one field:
+UpdateRulesToCheck:
+load
+	UpdateID,
+	RulePart1 & '|' & RulePart2 as Rule
+Resident UpdateChecks
+where
+	not isnull(RulePart1)
+    AND not isnull(RulePart2)
+;
+
+drop table UpdateChecks;
+
+
+
+//Now we will match the Rules from the Rules table with the Rules that need to be checked
+left join(UpdateRulesToCheck)
+load
+	Rule,
+    1 as RuleExists_Flag
+Resident Rules;
+
+drop table Rules;
+
+
+//Now we need to check if all the Rules of the Update (possible comparisions) have a corresponding rule from the rules table
+UpdateCheckResult:
+Load
+	UpdateID,
+    count(Rule) as NoOfRulesToCheck,
+    sum(RuleExists_Flag) as NoOfExistingRules
+Resident UpdateRulesToCheck
+group by UpdateID;
+
+drop table UpdateRulesToCheck;
+
+
+
+//we need to add the middle pages to the checked updates.
+left join(UpdateCheckResult)
+load
+	UpdateID,
+    MiddlePage
+Resident Updates;
+
+drop table Updates;
+
+
+//in the last step we sum up all the middle pages of valid updates
+Results:
+load
+	sum(MiddlePage) as Result
+Resident UpdateCheckResult
+where NoOfRulesToCheck = NoOfExistingRules
+group by;
+
+drop table UpdateCheckResult;
