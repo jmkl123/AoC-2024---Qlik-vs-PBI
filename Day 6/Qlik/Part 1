@@ -1,0 +1,179 @@
+//Import
+Input:
+LOAD
+    Rowno() as PositionY,
+    @1 AS Grid
+FROM [lib://AoC/Day6/Input.txt]
+(txt, utf8, no labels, delimiter is ';', msq);
+
+
+
+//We need to gather some parameters
+// 1. Size of the Grid
+let vHeight = NoOfRows('Input');
+let vWidth = len(peek('Grid'));
+Trace Height = $(vHeight) - Width = $(vWidth);
+
+
+//2. Starting Position
+StartingPosition:
+load
+	FindOneOf(Grid,'^') as StartingX,
+	PositionY as StartingY
+Resident Input
+where FindOneOf(Grid,'^') > 0; //interestingly wildmatch(Grid,'*^*') did not work
+
+drop field PositionY;
+
+
+let vCurrentPositionX = peek('StartingX');
+let vCurrentPositionY = peek('StartingY');
+Trace StartingPositionX = $(vCurrentPositionX) - StartingPositionY = $(vCurrentPositionY);
+
+drop table StartingPosition;
+
+
+// 3. Helper Variable
+set vDirection = 'up';
+
+
+
+//Now we can start with the solution
+PassedFields:
+load
+	$(vCurrentPositionX) as PassedX,
+    $(vCurrentPositionY) as PassedY
+AutoGenerate 1;
+
+
+
+
+Do while vCurrentPositionX <> 1 AND vCurrentPositionY <> 1 AND vCurrentPositionX <> vWidth AND vCurrentPositionY <> vHeight
+   
+	//UP
+    if '$(vDirection)' = 'up' then
+   		
+        Trace Current Position: $(vCurrentPositionX),$(vCurrentPositionY) - Direction: $(vDirection);
+        
+		let vContentNextField = mid(peek('Grid',$(vCurrentPositionY)-2 /*2 because peek starts counting at 0*/,'Input'),$(vCurrentPositionX),1);
+   	
+   		if '$(vContentNextField)' <> '#' then
+        
+        	let vCurrentPositionX = $(vCurrentPositionX);
+			let vCurrentPositionY = $(vCurrentPositionY)-1;	
+            
+            Concatenate(PassedFields)
+			load
+				$(vCurrentPositionX) as PassedX,
+			    $(vCurrentPositionY) as PassedY
+			AutoGenerate 1;
+            
+        Else
+        	set vDirection = 'right';  
+            
+        end if;
+        
+   	end if;
+    
+    
+
+	//Down
+    if '$(vDirection)' = 'down' then
+
+        Trace Current Position: $(vCurrentPositionX),$(vCurrentPositionY) - Direction: $(vDirection);
+
+		let vContentNextField = mid(peek('Grid',$(vCurrentPositionY) /*same number because peek starts counting at 0*/,'Input'),$(vCurrentPositionX),1);
+   	
+   		if '$(vContentNextField)' <> '#' then
+        
+        	let vCurrentPositionX = $(vCurrentPositionX);
+			let vCurrentPositionY = $(vCurrentPositionY)+1;	
+            
+            Concatenate(PassedFields)
+			load
+				$(vCurrentPositionX) as PassedX,
+			    $(vCurrentPositionY) as PassedY
+			AutoGenerate 1;
+            
+        Else
+        	set vDirection = 'left';   
+           
+        end if;
+        
+   	end if;
+    
+    
+	//Left
+    if '$(vDirection)' = 'left' then
+
+        Trace Current Position: $(vCurrentPositionX),$(vCurrentPositionY) - Direction: $(vDirection);
+
+		let vContentNextField = mid(peek('Grid',$(vCurrentPositionY)-1 /*-1 because peek starts counting at 0*/,'Input'),$(vCurrentPositionX)-1,1);
+   	
+   		if '$(vContentNextField)' <> '#' then
+        
+        	let vCurrentPositionX = $(vCurrentPositionX)-1;
+			let vCurrentPositionY = $(vCurrentPositionY);	
+            
+            Concatenate(PassedFields)
+			load
+				$(vCurrentPositionX) as PassedX,
+			    $(vCurrentPositionY) as PassedY
+			AutoGenerate 1;
+            
+        Else
+        	set vDirection = 'up';  
+        
+        End If;
+        
+   	end if;  
+    
+    
+	//right
+    if '$(vDirection)' = 'right' then
+
+        Trace Current Position: $(vCurrentPositionX),$(vCurrentPositionY) - Direction: $(vDirection);
+
+		let vContentNextField = mid(peek('Grid',$(vCurrentPositionY)-1 /*-1 because peek starts counting at 0*/,'Input'),$(vCurrentPositionX)+1,1);
+   	
+   		if '$(vContentNextField)' <> '#' then
+        
+        	let vCurrentPositionX = $(vCurrentPositionX)+1;
+			let vCurrentPositionY = $(vCurrentPositionY);	
+            
+            Concatenate(PassedFields)
+			load
+				$(vCurrentPositionX) as PassedX,
+			    $(vCurrentPositionY) as PassedY
+			AutoGenerate 1;
+            
+        Else
+        	set vDirection = 'down'; 
+            
+        End If;
+        
+   	end if;      
+
+loop;
+
+
+drop table Input;
+
+
+//Now we have all the passed fields, but some fields might have been passed multiple times. Therefore we have to load distinct
+DistinctFields:
+NoConcatenate
+load Distinct * Resident PassedFields;
+
+drop table PassedFields;
+
+
+
+//we could now already just read the lines of the table from the data model view in Qlik, but we want to have it consistent and get the result in the datamodel
+Results:
+load
+	count(PassedX) as Result
+Resident DistinctFields
+Group by;
+
+drop table DistinctFields;
