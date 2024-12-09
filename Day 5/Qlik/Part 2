@@ -1,0 +1,232 @@
+// Part 2 uses the Code of Part 1. Just at the end we change the logic a little bit to keep the false updates instead of the valid once
+
+
+//Import
+//We load Rules and Updates in different tables
+Rules:
+LOAD
+    @1 as Rule
+FROM [lib://AoC/Day5/Input.txt]
+(txt, utf8, no labels, delimiter is '\t', msq)
+where wildmatch(@1,'*|*');
+
+
+Updates:
+LOAD
+    rowno() as UpdateID,
+    @1 as UpdateContent,
+    SubStringCount(@1,',') + 1 as UpdatePages
+FROM [lib://AoC/Day5/Input.txt]
+(txt, utf8, no labels, delimiter is '\t', msq)
+where wildmatch(@1,'*,*');
+
+
+//We need to identify the middle page of the update.
+Updates2:
+load
+	*,
+	subfield(UpdateContent,',',ceil(UpdatePages/2)) as MiddlePage
+Resident Updates;
+
+drop table Updates;
+Rename table Updates2 to Updates;
+
+
+
+//We need to know how many pages the biggest update has, so that the following loops can often enough
+MaxUpdatePages:
+load
+	max(UpdatePages) as MaxUpdatePages
+Resident Updates
+group by;
+
+let vMaxUpdatePages = peek('MaxUpdatePages');
+// drop field UpdatePages; //This was commented out for part 2 because we use it later
+drop table MaxUpdatePages;
+
+
+
+//Convert Updates in all the combinations that must be checked
+for i = 1 to $(vMaxUpdatePages)
+
+    UpdateChecks:
+    load
+        UpdateID,
+        subfield(UpdateContent,',',$(i)) as RulePart1,
+        subfield(UpdateContent,',',$(i)+IterNo()) as RulePart2
+    Resident Updates
+    while iterno() <= $(vMaxUpdatePages)-1;
+
+next i;
+
+
+
+//As not all updates have the same length, wie produced some non-necessary checks (null values)
+//We wil get rid of them and combine the Rule Parts to one field:
+UpdateRulesToCheck:
+load
+	UpdateID,
+	RulePart1 & '|' & RulePart2 as Rule
+Resident UpdateChecks
+where
+	not isnull(RulePart1)
+    AND not isnull(RulePart2)
+;
+
+drop table UpdateChecks;
+
+
+
+//Now we will match the Rules from the Rules table with the Rules that need to be checked
+left join(UpdateRulesToCheck)
+load
+	Rule,
+    1 as RuleExists_Flag
+Resident Rules;
+
+
+//From here on Part2 differs from Part 1
+
+
+//Now we need to check if all the Rules of the Update (possible comparisions) have a corresponding rule from the rules table
+UpdateCheckResult:
+Load
+	UpdateID,
+    count(Rule) as NoOfRulesToCheck,
+    sum(RuleExists_Flag) as NoOfExistingRules
+Resident UpdateRulesToCheck
+group by UpdateID;
+
+drop table UpdateRulesToCheck;
+
+
+
+//We need to get list of IDs of false updates
+FalseUpdatesID:
+load
+	UpdateID as FalseUpdateID
+Resident UpdateCheckResult
+where NoOfRulesToCheck <> NoOfExistingRules;
+
+drop table UpdateCheckResult;
+
+
+
+//Now we will only keep false Updates
+FalseUpdates:
+NoConcatenate
+Load
+	UpdateID,
+    UpdateContent,
+    UpdatePages
+Resident Updates
+where exists(FalseUpdateID,UpdateID);
+
+drop tables Updates, FalseUpdatesID;
+
+
+//The SortingRules can create circles. Therefore we can only apply the rules that have informations about pages that are actuatlly used in the Update
+//We therefore check each of the false updates individually
+
+
+for each vUpdateID in FieldValueList('UpdateID')
+
+	Trace UPDATE ID: $(vUpdateID);
+
+	PagesOfUpdate:
+    load
+    	subfield(UpdateContent,',') as PageNumber
+    Resident FalseUpdates
+    where UpdateID = $(vUpdateID);
+    	
+        
+	SortingInput:
+	Load
+		subfield(Rule,'|',1) as SortFirst,
+	    subfield(Rule,'|',2) as SortSecond,
+	    subfield(Rule,'|',2) as SortSecondName
+	Resident Rules
+    where
+    	exists(PageNumber,subfield(Rule,'|',1))
+        AND exists(PageNumber,subfield(Rule,'|',2));
+        
+    drop table PagesOfUpdate;
+        
+
+    //We are going to use the hierarchy function. To make it work properly we must assume, that every number kann be on top.
+    //Therefore we have to add all the numbers again without having a SortFirst Value
+    Concatenate(SortingInput)
+    load Distinct
+        null() as SortFirst,
+        SortFirst as SortSecond,
+        SortFirst as SortSecondName
+    Resident SortingInput;
+
+
+
+    //The idea is, that we can treat the "comes before" logic as a hierarchy.
+    //Using the Depth information in the next step, we can choose the occurence with the highest depth of each page, because the longest way to the "top" must be
+    //the "most sorted" position.
+    FullHierarchy:
+    HierarchyBelongsTo(SortSecond,SortFirst,SortSecondName,ParentID,ParentName,Depth)
+    load
+        SortFirst,
+        SortSecond,
+        SortSecondName //The Hierarchy function needs a third parameter. We will drop it afterwords
+    Resident SortingInput;
+
+    drop table SortingInput;
+
+
+
+    //We only want to keep the lowest possible level (highest depths) for each number
+    MaxOfDepths:
+    load
+        SortSecond,
+        max(Depth) as MaxOfDepth
+    Resident FullHierarchy
+    group by SortSecond;
+
+    left join(FullHierarchy)
+    load * Resident MaxOfDepths;
+
+    drop table MaxOfDepths;
+
+
+    CorrectDepth:
+    load 
+    	*,
+        $(vUpdateID) as UpdateID
+    Resident FullHierarchy
+    where Depth = MaxOfDepth;
+
+    drop table FullHierarchy;
+
+
+next vUpdateID;
+
+drop table Rules;
+
+
+//now we have all pages of all the false updates and for each page the position within the update (0 = first position, 1 = second position, etc.)
+//We now have to add to add the amount of pages per Update again
+left join(CorrectDepth)
+Load
+	UpdateID,
+    UpdatePages
+Resident FalseUpdates;
+
+
+drop table FalseUpdates;
+
+
+
+//now we have to only keep the pages that are in the middle. e.g. if an update has 5 pages. we need to have the page at the third position which is the Update Depth of 2
+Results:
+load
+	sum(SortSecond) as Result
+Resident CorrectDepth
+where Depth = ceil(UpdatePages/2)-1
+group by;
+
+drop table CorrectDepth;
