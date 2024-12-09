@@ -1,0 +1,485 @@
+// IMPORTANT: To get the result you have to count(ObstacleIterationResult) and filter for ObstacleIterationResult = yes on the frontend once reload was completed.
+// The script ran 4,5 hours on my machine!
+
+// HINT: The Script is written very badly, it could probably be improved a lot by using subs. - But it runs!
+
+//Import
+Input:
+LOAD
+    Rowno() as PositionY,
+    @1 AS Grid
+FROM [lib://AoC/Day6/Input.txt]
+(txt, utf8, no labels, delimiter is ';', msq);
+
+
+
+//We need to gather some parameters
+// 1. Size of the Grid
+let vHeight = NoOfRows('Input');
+let vWidth = len(peek('Grid'));
+Trace Height = $(vHeight) - Width = $(vWidth);
+
+
+//2. Starting Position
+StartingPosition:
+load
+	FindOneOf(Grid,'^') as StartingX,
+	PositionY as StartingY
+Resident Input
+where FindOneOf(Grid,'^') > 0; //interestingly wildmatch(Grid,'*^*') did not work
+
+drop field PositionY;
+
+
+let vCurrentPositionX = peek('StartingX');
+let vCurrentPositionY = peek('StartingY');
+Trace StartingPositionX = $(vCurrentPositionX) - StartingPositionY = $(vCurrentPositionY);
+
+drop table StartingPosition;
+
+
+// 3. Helper Variable
+set vDirection = 'up';
+
+
+
+//Now we can start with the solution
+PassedFields:
+load
+	$(vCurrentPositionX) as PassedX,
+    $(vCurrentPositionY) as PassedY,
+    'up' as Direction,
+    $(vCurrentPositionX) & '_' & $(vCurrentPositionY) & '_' & 'up' as PassedKey
+AutoGenerate 1;
+
+
+
+
+Do while vCurrentPositionX <> 1 AND vCurrentPositionY <> 1 AND vCurrentPositionX <> vWidth AND vCurrentPositionY <> vHeight
+   
+   	Switch '$(vDirection)'
+	
+    //UP
+    Case 'up'
+   		
+        Trace Current Position: $(vCurrentPositionX),$(vCurrentPositionY) - Direction: $(vDirection);
+        
+		let vContentNextField = mid(peek('Grid',$(vCurrentPositionY)-2 /*2 because peek starts counting at 0*/,'Input'),$(vCurrentPositionX),1);
+   	
+   		if '$(vContentNextField)' <> '#' then
+        
+        	let vCurrentPositionX = $(vCurrentPositionX);
+			let vCurrentPositionY = $(vCurrentPositionY)-1;	
+            
+            Concatenate(PassedFields)
+			load
+				$(vCurrentPositionX) as PassedX,
+			    $(vCurrentPositionY) as PassedY,
+                '$(vDirection)' as Direction,
+                $(vCurrentPositionX) & '_' & $(vCurrentPositionY) & '_' & '$(vDirection)' as PassedKey
+			AutoGenerate 1;
+            
+        Else
+        	set vDirection = 'right';  
+            
+        end if;
+        
+   	
+    //Down
+    Case 'down'
+
+        Trace Current Position: $(vCurrentPositionX),$(vCurrentPositionY) - Direction: $(vDirection);
+
+		let vContentNextField = mid(peek('Grid',$(vCurrentPositionY) /*same number because peek starts counting at 0*/,'Input'),$(vCurrentPositionX),1);
+   	
+   		if '$(vContentNextField)' <> '#' then
+        
+        	let vCurrentPositionX = $(vCurrentPositionX);
+			let vCurrentPositionY = $(vCurrentPositionY)+1;	
+            
+            Concatenate(PassedFields)
+			load
+				$(vCurrentPositionX) as PassedX,
+			    $(vCurrentPositionY) as PassedY,
+                '$(vDirection)' as Direction,
+                $(vCurrentPositionX) & '_' & $(vCurrentPositionY) & '_' & '$(vDirection)' as PassedKey
+			AutoGenerate 1;
+            
+        Else
+        	set vDirection = 'left';   
+           
+        end if;
+        
+   	
+    //Left
+    Case 'left'
+
+        Trace Current Position: $(vCurrentPositionX),$(vCurrentPositionY) - Direction: $(vDirection);
+
+		let vContentNextField = mid(peek('Grid',$(vCurrentPositionY)-1 /*-1 because peek starts counting at 0*/,'Input'),$(vCurrentPositionX)-1,1);
+   	
+   		if '$(vContentNextField)' <> '#' then
+        
+        	let vCurrentPositionX = $(vCurrentPositionX)-1;
+			let vCurrentPositionY = $(vCurrentPositionY);	
+            
+            Concatenate(PassedFields)
+			load
+				$(vCurrentPositionX) as PassedX,
+			    $(vCurrentPositionY) as PassedY,
+                '$(vDirection)' as Direction,
+                $(vCurrentPositionX) & '_' & $(vCurrentPositionY) & '_' & '$(vDirection)' as PassedKey
+			AutoGenerate 1;
+            
+        Else
+        	set vDirection = 'up';  
+        
+        End If;
+        
+   	
+    //right
+    Case  'right'
+
+        Trace Current Position: $(vCurrentPositionX),$(vCurrentPositionY) - Direction: $(vDirection);
+
+		let vContentNextField = mid(peek('Grid',$(vCurrentPositionY)-1 /*-1 because peek starts counting at 0*/,'Input'),$(vCurrentPositionX)+1,1);
+   	
+   		if '$(vContentNextField)' <> '#' then
+        
+        	let vCurrentPositionX = $(vCurrentPositionX)+1;
+			let vCurrentPositionY = $(vCurrentPositionY);	
+            
+            Concatenate(PassedFields)
+			load
+				$(vCurrentPositionX) as PassedX,
+			    $(vCurrentPositionY) as PassedY,
+                '$(vDirection)' as Direction,
+                $(vCurrentPositionX) & '_' & $(vCurrentPositionY) & '_' & '$(vDirection)' as PassedKey
+			AutoGenerate 1;
+            
+        Else
+        	set vDirection = 'down'; 
+            
+        End If;
+        
+	end switch;
+
+loop;
+
+
+
+
+//We need to add the step position for each field in the path
+Path:
+Load
+	rowno()-1 as Path.StepID, //-1 because Startposition is 0
+    PassedX as Path.PassedX,
+    PassedY as Path.PassedY,
+    Direction as Path.Direction,
+    PassedKey as Path.PassedKey
+Resident PassedFields;
+
+drop table PassedFields;
+
+
+//We now have all the Steps (Field Coordinates + Direction)
+//Next step is to place an obstacle one by one on each step of the path
+//and see if the guard will still leave the field or end in a circle.
+
+//We need to keep track of all checked obstacle position to not check them twice
+AllCheckedObstacles:
+load
+	0 as PassedCoordination
+AutoGenerate 0;
+
+
+for each vFieldToCheckID in FieldValueList('Path.StepID')
+
+	Trace Checking Step $(vFieldToCheckID);
+    
+    set vIsIteration = 'no';
+    let vStepOfIteration = $(vFieldToCheckID);
+
+
+	//We get the coordinates for the new obstacle
+    NewObstacle:
+    load
+    	Path.PassedX,
+        Path.PassedY
+    Resident Path
+    where Path.StepID = $(vFieldToCheckID);
+    
+    let vNewObstacleX = peek('Path.PassedX');
+	let vNewObstacleY = peek('Path.PassedY');
+    
+    drop table NewObstacle;
+    
+    
+   	//We check if the obstacle was already checked
+    CheckCoordinatesForDuplicates:
+    load
+    	if(exists(PassedCoordination, $(vNewObstacleX) & '_' & $(vNewObstacleY)),'doNotCheckAgain','CheckIt') as AlreadyCheckedResult
+    autogenerate 1;
+    
+    let vCheckNecessary = Peek('AlreadyCheckedResult');
+    
+    drop table CheckCoordinatesForDuplicates;                
+                  
+    
+    //Add the Coordination of this iteration to the list of checkd Obstacles
+    AllCheckedObstacles:
+    load
+    	$(vNewObstacleX) & '_' & $(vNewObstacleY) as PassedCoordination            
+    AutoGenerate 1;
+
+    
+	if $(vFieldToCheckID) <> 0 /*the rules say we can not place an obstacle on the start position of the guard*/ AND '$(vCheckNecessary)' = 'CheckIt' then 
+
+		//We do not want to place the the obstacle and check the whole path again. instead we take all the steps that are passed alread
+        //and add an obstacle at the next position
+        PassedFieldsCurrentIteration:
+        load
+            Path.PassedX as PassedX,
+            Path.PassedY as PassedY,
+            Path.Direction as Direction,
+            Path.StepID as StepID,
+            Path.PassedKey as PassedKey
+        Resident Path
+        where Path.StepID < $(vFieldToCheckID);
+        
+        
+        //We set the last step as starting position because the field of current step will be the obstacle to test
+        CurrentPosition:
+        load
+        	Path.PassedX,
+            Path.PassedY,
+            Path.Direction
+        Resident Path
+        where Path.StepID = $(vFieldToCheckID)-1;
+        
+        let vCurrentPositionX = peek('Path.PassedX');
+		let vCurrentPositionY = peek('Path.PassedY');
+		let vDirection = peek('Path.Direction');
+        
+        drop table CurrentPosition;
+        
+        
+//         //We get the coordinates for the new obstacle
+//         NewObstacle:
+//         load
+//         	Path.PassedX,
+//             Path.PassedY
+//         Resident Path
+//         where Path.StepID = $(vFieldToCheckID);
+        
+//         let vNewObstacleX = peek('Path.PassedX');
+// 		let vNewObstacleY = peek('Path.PassedY');
+        
+//         drop table NewObstacle;
+               
+        
+        Do while vCurrentPositionX <> 1 AND vCurrentPositionY <> 1 AND vCurrentPositionX <> vWidth AND vCurrentPositionY <> vHeight AND vIsIteration = 'no'
+       
+            Switch '$(vDirection)'
+
+            //UP
+            Case 'up'
+
+                Trace Field to Check: $(vFieldToCheckID) - Current Position: $(vCurrentPositionX),$(vCurrentPositionY) - Direction: $(vDirection);
+
+                let vContentNextField = mid(peek('Grid',$(vCurrentPositionY)-2 /*2 because peek starts counting at 0*/,'Input'),$(vCurrentPositionX),1);
+
+                if '$(vContentNextField)' <> '#' AND not($(vCurrentPositionX) = $(vNewObstacleX) AND $(vCurrentPositionY)-1 = $(vNewObstacleY)) then
+                    
+                    let vCurrentPositionX = $(vCurrentPositionX);
+                    let vCurrentPositionY = $(vCurrentPositionY)-1;	
+
+            		//Check if we created a loop
+            		//HINT - if exists(PassedKey, $(vCurrentPositionX) & '_' & $(vCurrentPositionY) & '_' & '$(vDirection)') - this did not work. apparently you can use exists only in if-statemtns within a load-statement
+            		CheckStepForIteraion:
+            		load
+            			if(exists(PassedKey, $(vCurrentPositionX) & '_' & $(vCurrentPositionY) & '_' & '$(vDirection)'),'yes','no') as StepResult
+            		autogenerate 1;
+            		
+            		let vIsIteration = Peek('StepResult');
+            		
+            		drop table CheckStepForIteraion;
+            		
+            		//only if there wa no iteration yet, we add the field to the path of the current iteration
+            		if '$(vIsIteration)' = 'no' then
+            		
+            			Concatenate(PassedFieldsCurrentIteration)
+            		    load
+            		        $(vCurrentPositionX) as PassedX,
+            		        $(vCurrentPositionY) as PassedY,
+            		        '$(vDirection)' as Direction,
+                            $(vStepOfIteration) as StepID,
+            		        $(vCurrentPositionX) & '_' & $(vCurrentPositionY) & '_' & '$(vDirection)' as PassedKey
+            		    AutoGenerate 1;
+                        
+                        let vStepOfIteration = $(vStepOfIteration)+1;
+            		    
+            		endif;
+
+                Else
+                    set vDirection = 'right';  
+
+                end if;
+
+
+            //Down
+            Case 'down'
+
+                Trace Field to Check: $(vFieldToCheckID) - Current Position: $(vCurrentPositionX),$(vCurrentPositionY) - Direction: $(vDirection);
+
+                let vContentNextField = mid(peek('Grid',$(vCurrentPositionY) /*same number because peek starts counting at 0*/,'Input'),$(vCurrentPositionX),1);
+
+                if '$(vContentNextField)' <> '#' AND not($(vCurrentPositionX) = $(vNewObstacleX) AND $(vCurrentPositionY)+1 = $(vNewObstacleY))then
+
+                    let vCurrentPositionX = $(vCurrentPositionX);
+                    let vCurrentPositionY = $(vCurrentPositionY)+1;	
+
+            		//Check if we created a loop
+            		//HINT - if exists(PassedKey, $(vCurrentPositionX) & '_' & $(vCurrentPositionY) & '_' & '$(vDirection)') - this did not work. apparently you can use exists only in if-statemtns within a load-statement
+            		CheckStepForIteraion:
+            		load
+            			if(exists(PassedKey, $(vCurrentPositionX) & '_' & $(vCurrentPositionY) & '_' & '$(vDirection)'),'yes','no') as StepResult
+            		autogenerate 1;
+            		
+            		let vIsIteration = Peek('StepResult');
+            		
+            		drop table CheckStepForIteraion;
+            		
+            		//only if there wa no iteration yet, we add the field to the path of the current iteration
+            		if '$(vIsIteration)' = 'no' then
+            		
+            			Concatenate(PassedFieldsCurrentIteration)
+            		    load
+            		        $(vCurrentPositionX) as PassedX,
+            		        $(vCurrentPositionY) as PassedY,
+            		        '$(vDirection)' as Direction,
+                            $(vStepOfIteration) as StepID,
+            		        $(vCurrentPositionX) & '_' & $(vCurrentPositionY) & '_' & '$(vDirection)' as PassedKey
+            		    AutoGenerate 1;
+                        
+                        let vStepOfIteration = $(vStepOfIteration)+1;
+            		    
+            		endif;
+
+                Else
+                    set vDirection = 'left';   
+
+                end if;
+
+
+            //Left
+            Case 'left'
+
+                Trace Field to Check: $(vFieldToCheckID) - Current Position: $(vCurrentPositionX),$(vCurrentPositionY) - Direction: $(vDirection);
+
+                let vContentNextField = mid(peek('Grid',$(vCurrentPositionY)-1 /*-1 because peek starts counting at 0*/,'Input'),$(vCurrentPositionX)-1,1);
+
+                if '$(vContentNextField)' <> '#' AND not($(vCurrentPositionX)-1 = $(vNewObstacleX) AND $(vCurrentPositionY) = $(vNewObstacleY))then
+
+                    let vCurrentPositionX = $(vCurrentPositionX)-1;
+                    let vCurrentPositionY = $(vCurrentPositionY);	
+
+            		//Check if we created a loop
+            		//HINT - if exists(PassedKey, $(vCurrentPositionX) & '_' & $(vCurrentPositionY) & '_' & '$(vDirection)') - this did not work. apparently you can use exists only in if-statemtns within a load-statement
+            		CheckStepForIteraion:
+            		load
+            			if(exists(PassedKey, $(vCurrentPositionX) & '_' & $(vCurrentPositionY) & '_' & '$(vDirection)'),'yes','no') as StepResult
+            		autogenerate 1;
+            		
+            		let vIsIteration = Peek('StepResult');
+            		
+            		drop table CheckStepForIteraion;
+            		
+            		//only if there wa no iteration yet, we add the field to the path of the current iteration
+            		if '$(vIsIteration)' = 'no' then
+            		
+            			Concatenate(PassedFieldsCurrentIteration)
+            		    load
+            		        $(vCurrentPositionX) as PassedX,
+            		        $(vCurrentPositionY) as PassedY,
+            		        '$(vDirection)' as Direction,
+                            $(vStepOfIteration) as StepID,
+            		        $(vCurrentPositionX) & '_' & $(vCurrentPositionY) & '_' & '$(vDirection)' as PassedKey
+            		    AutoGenerate 1;
+                        
+                        let vStepOfIteration = $(vStepOfIteration)+1;
+            		    
+            		endif;
+
+                Else
+                    set vDirection = 'up';  
+
+                End If;
+
+
+            //right
+            Case  'right'
+
+                Trace Field to Check: $(vFieldToCheckID) - Current Position: $(vCurrentPositionX),$(vCurrentPositionY) - Direction: $(vDirection);
+
+                let vContentNextField = mid(peek('Grid',$(vCurrentPositionY)-1 /*-1 because peek starts counting at 0*/,'Input'),$(vCurrentPositionX)+1,1);
+				
+                if '$(vContentNextField)' <> '#' AND not($(vCurrentPositionX)+1 = $(vNewObstacleX) AND $(vCurrentPositionY) = $(vNewObstacleY))then
+
+                    let vCurrentPositionX = $(vCurrentPositionX)+1;
+                    let vCurrentPositionY = $(vCurrentPositionY);	
+
+            		//Check if we created a loop
+            		//HINT - if exists(PassedKey, $(vCurrentPositionX) & '_' & $(vCurrentPositionY) & '_' & '$(vDirection)') - this did not work. apparently you can use exists only in if-statemtns within a load-statement
+            		CheckStepForIteraion:
+            		load
+            			if(exists(PassedKey, $(vCurrentPositionX) & '_' & $(vCurrentPositionY) & '_' & '$(vDirection)'),'yes','no') as StepResult
+            		autogenerate 1;
+            		
+            		let vIsIteration = Peek('StepResult');
+            		
+            		drop table CheckStepForIteraion;
+            		
+            		//only if there wa no iteration yet, we add the field to the path of the current iteration
+            		if '$(vIsIteration)' = 'no' then
+            		
+            			Concatenate(PassedFieldsCurrentIteration)
+            		    load
+            		        $(vCurrentPositionX) as PassedX,
+            		        $(vCurrentPositionY) as PassedY,
+            		        '$(vDirection)' as Direction,
+                            $(vStepOfIteration) as StepID,
+            		        $(vCurrentPositionX) & '_' & $(vCurrentPositionY) & '_' & '$(vDirection)' as PassedKey
+            		    AutoGenerate 1;
+            		
+                    	let vStepOfIteration = $(vStepOfIteration)+1;
+                    
+            		endif;
+
+                Else
+                    set vDirection = 'down'; 
+
+                End If;
+
+            end switch;
+            
+
+    	loop;
+        
+        
+        ObstacleCheckResult:
+        load
+        	$(vNewObstacleX) as ObstacleX,
+            $(vNewObstacleY) as ObstacleY,
+            '$(vIsIteration)' as ObstacleIterationResult,
+            '$(vFieldToCheckID)' as FieldToCheck
+       	AutoGenerate 1;
+         
+   
+       drop table PassedFieldsCurrentIteration;
+
+        
+    End If;
+       
+
+next vFieldToCheckID;
