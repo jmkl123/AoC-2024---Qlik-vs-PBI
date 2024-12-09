@@ -1,0 +1,107 @@
+Input:
+LOAD
+    subfield(@1,':',1) as Target,
+    subfield(subfield(@1,':',2),' ') as Value
+FROM [lib://AoC/Day7/Input.txt]
+(txt, utf8, no labels, delimiter is '|', msq);
+
+
+//We need to add the position of each number per equation
+Input2:
+load
+	*,
+    if(Target = Peek('Target'), peek('Position') + 1, 1) as Position
+Resident Input
+where len(Value) > 0; //Blank values are not null because we are loading from a txt.
+
+
+drop table Input;
+Rename table Input2 to Input;
+
+
+//We need to know the how long the longest input is so we can run the following loop that often
+LongestInput:
+load
+	max(Position) as MaxLength
+Resident Input
+group by;
+
+
+let vMaxLength = peek('MaxLength');
+drop table LongestInput;
+
+
+
+//Now we create all possible outcomes
+Evaluation:
+Load
+	Target,
+    Value as ValueEvaluation
+Resident Input
+where Position = 1;
+
+
+for i = 2 to $(vMaxLength)
+
+
+    left join(Evaluation)
+    load
+    	Target,
+        Value as NextValue
+    Resident Input
+    where Position = $(i);
+    
+	
+	Evaluation2:
+    load
+    	Target,
+        ValueEvaluation + coalesce(NextValue,0) as ValueNew		//some inputs are shorter. therefore we need to use coalesce to make sure null values are not breaking the calculation
+    Resident Evaluation;
+    
+    
+    Concatenate(Evaluation2)
+    load
+    	Target,
+        ValueEvaluation * Coalesce(NextValue,1) as ValueNew		//some inputs are shorter. therefore we need to use coalesce to make sure null values are not breaking the calculation
+    Resident Evaluation;   
+    
+    Concatenate(Evaluation2)
+    load
+    	Target,
+        ValueEvaluation & NextValue as ValueNew
+    Resident Evaluation;  
+    
+
+	drop table Evaluation;
+    Rename Table Evaluation2 to Evaluation;
+    rename field ValueNew to ValueEvaluation;
+
+next i;
+
+drop table Input;
+
+
+
+//we now have all possible results. some results can be achieved in multiple ways. therefore we have to remove duplicates
+//Furthermore we will only keep targets, that can be achieved
+PossibleTargets:
+load Distinct
+	Target
+Resident Evaluation
+where Target = ValueEvaluation;
+
+drop table Evaluation;
+
+
+
+//Now we need to check how many Targets can be achieved:
+Results:
+Load 
+	sum(Target) as Result
+Resident PossibleTargets
+group by;
+
+drop table PossibleTargets;
+
+//HINT: The datamodel viewer shows the Value with an exponent as it gets really big.
+//To see the number, add it as a measure in the fronten and and change the number format
