@@ -1,0 +1,129 @@
+//Load Input
+Input:
+LOAD
+	rowno() as Y,
+    @1 as Data
+FROM [lib://AoC/Day8/Input.txt]
+(txt, codepage is 28591, no labels, delimiter is ';', msq);
+
+
+
+//Get the lenght of the input
+let vLength = len(peek('Data'));
+
+
+
+//We want to split the input so we have each symbol separated
+for i = 1 to $(vLength)
+
+	Data:
+    Load
+    	$(i) as X_First,
+        Y as Y_First,
+        mid(Data,$(i),1) as Symbol
+    Resident Input;
+    
+next i;
+
+
+drop table Input;
+
+
+
+//We do not need empty (='.') fields
+Data2:
+NoConcatenate load * Resident Data
+where Symbol <> '.';
+
+drop table Data;
+Rename Table Data2 to Data;
+
+
+
+//Now we want to have all possible pairs per symbol so we use join
+left join(Data)
+load
+	X_First as X_Second,
+    Y_First as Y_Second,
+    Symbol
+Resident Data;
+
+
+
+//the join will also link each position of a symbol to its self. we need to eliminate thos combinations:
+Data2:
+NoConcatenate load * Resident Data
+where X_First <> X_Second AND Y_First <> Y_Second;
+
+drop table Data;
+Rename Table Data2 to Data;
+
+
+
+//Now we calculate the Position of the two antinodes
+Antinodes:
+load
+	X_First,
+    Y_First,
+    X_Second,
+    Y_Second,
+    Symbol,
+    X_First + (X_First-X_Second) as X_Antinode1,
+    Y_First + (Y_First-Y_Second) as Y_Antinode1,
+    X_Second + (X_Second-X_First) as X_Antinode2,
+    Y_Second + (Y_Second-Y_First) as Y_Antinode2
+Resident Data;
+
+drop table Data;
+
+
+
+
+//Now that we have all coordinates of all ll possible Antinodes, we have to bring them back in one table
+//We only keep data that is within the grid (>0 and <=vLength)
+AllCoordinatesOfAntinodes:
+load
+    X_Antinode1 & '_' & Y_Antinode1 as XY
+Resident Antinodes
+where
+	    X_Antinode1 > 0
+    AND X_Antinode1 <= $(vLength)
+	AND Y_Antinode1 > 0
+    AND Y_Antinode1 <= $(vLength)
+;
+
+
+Concatenate(AllCoordinatesOfAntinodes)
+load
+    X_Antinode2 & '_' & Y_Antinode2 as XY
+Resident Antinodes
+where
+	    X_Antinode2 > 0
+    AND X_Antinode2 <= $(vLength)
+	AND Y_Antinode2 > 0
+    AND Y_Antinode2 <= $(vLength)
+;
+
+drop table Antinodes;
+
+
+
+//We need to eliminate duplicates, because some coordinates can have antinodes produced by different symbols (antennas)
+AllDifferentAntinodeCoordinates:
+NoConcatenate
+Load Distinct
+	XY
+Resident AllCoordinatesOfAntinodes;
+
+drop table AllCoordinatesOfAntinodes;
+
+
+
+//Now we only want to keep Coordinates that have only antinodes and count them
+Result:
+Load
+	count(XY) as Result
+Resident AllDifferentAntinodeCoordinates
+group by;
+
+drop table AllDifferentAntinodeCoordinates;
