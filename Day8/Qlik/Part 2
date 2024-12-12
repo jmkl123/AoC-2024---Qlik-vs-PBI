@@ -63,7 +63,6 @@ Rename Table Data2 to Data;
 //Now we calculate the Position of the all possible antinodes
 //We are not choosing an efficient approach. Instead we are calculating the most possible amount of antinodes
 //Antinodes outside the grid will be eliminated late in the script anyway.
-
 for i = 0 to $(vLength)-1
 
 	Antinodes:
