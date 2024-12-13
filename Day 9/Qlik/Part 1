@@ -1,0 +1,135 @@
+//Load Input
+Input:
+LOAD
+    @1 as DiskMap
+FROM [lib://AoC/Day9/Input.txt]
+(txt, utf8, no labels, delimiter is ';', msq);
+
+
+
+//We need to know how long the DiskMap is
+let vLength = len(peek('DiskMap'));
+
+
+
+//For this approach we need every digit of the input in a separate row
+//We know that every second value represents "free" - means every even number is free. We add this information here.
+//Furthermore we know that the file IDs are counted 0,1,2, etc. - We cann add this information using basic math an logic
+Data:
+Load
+	rowno() as Position,
+    if(even(rowno()),'free','file') as Type,
+    if(not even(rowno()), (rowno()-1)/2) as FileID,
+    mid(DiskMap,iterno(),1) as Value
+Resident Input
+while IterNo() <= $(vLength);
+
+drop table Input;
+
+
+
+
+//Now we need to add the correct amount of "free" or "file"
+//We do this in a two step approach. We add it per line separated by a delimiter and use the qlik subfield() function by splitting it in the next step and by that creating new lines.
+//First Step
+Data2:
+load
+	*,
+    if(
+    	Type = 'free'
+        ,
+        Repeat('.,',Value)
+        ,
+        Repeat(FileID & ',',Value)
+   ) as Block
+Resident Data;
+
+drop table Data;
+
+
+//Second Step
+Data3:
+load
+    SubField(Block,',') as Block
+Resident Data2;
+
+drop table Data2;
+
+
+//We have now generated some empty lines that we need to eliminate
+AllBlocks:
+load
+	rowno() as Position,		//We generate a new unique position for each of the new generated lines.
+	Block
+Resident Data3
+where len(Block) > 0;
+
+drop table Data3;
+
+
+
+//Now come the tricky part by filling the frees in reverse order
+//I am not going to explain this here, because it can be explained much easier using an image and I will to this in the LinkedIn post
+FreeBlocks:
+load
+	rowno() as HelperPosition,
+    Position
+Resident AllBlocks
+where Block = '.';
+
+
+AllFilesReverse:
+Load
+	rowno() as HelperPosition,
+    Position,
+    Block
+Resident AllBlocks
+where Block <> '.'
+order by Position desc;
+
+
+drop field Position from AllFilesReverse;
+let vNumberOfFileBlocks = peek('HelperPosition');
+
+    
+
+left join(FreeBlocks)
+load * Resident AllFilesReverse;
+
+drop table AllFilesReverse;
+
+
+left join(AllBlocks)
+load 
+	Position,
+    Block as Block_New
+Resident FreeBlocks;
+
+drop table FreeBlocks;
+
+
+//Now that the magic is over we have to only keep the right amount of Blocks (=vNumberOfFileBlocks)
+//and calculate the checksum per row
+PreResult:
+load
+	if(
+    	IsNum(Block)
+        ,
+        (Position-1) * Block //-1 because the rules of the task say that we start at 0
+        ,
+        (Position-1) * Block_New
+    ) as Value
+Resident AllBlocks
+where Position <= $(vNumberOfFileBlocks);
+
+drop table AllBlocks;
+
+
+//Results
+Result:
+Load
+	sum(Value) as Result
+Resident PreResult
+group by;
+
+drop table PreResult;
