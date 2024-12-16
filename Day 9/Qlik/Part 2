@@ -1,0 +1,289 @@
+//HINT: THIS CODE WORKS FOR THE EXAMPLE DATA BUT NOT FOR THE INPUT DATA.
+
+// Load Input
+Input:
+LOAD
+    @1 as DiskMap
+FROM [lib://AoC/Day9/Input.txt]
+(txt, utf8, no labels, delimiter is ';', msq);
+
+
+
+//We need to know how long the DiskMap is
+let vLength = len(peek('DiskMap'));
+
+
+
+//For this approach we need every "file" of the input in a separate row
+//We know that every second value represents "free" - means every even number is free. We add this information here.
+//Furthermore we know that the file IDs are counted 0,1,2, etc. - We cann add this information using basic math an logic
+Data:
+Load
+    if(even(rowno()),'free','file') as Type,
+    if(not even(rowno()), (rowno()-1)/2) as FileID,
+    mid(DiskMap,iterno(),1) as LengthOfBlock
+Resident Input
+while IterNo() <= $(vLength);
+
+drop table Input;
+
+
+//We do not need blocks with a length of 0.
+Data2:
+NoConcatenate
+load
+	*,
+    rowno() as Position,    
+    rowno() as Position_Original
+Resident Data
+where LengthOfBlock > 0;
+
+drop table Data;
+rename Table Data2 to Data;
+
+
+let vTotalAmountOfBlocks = NoOfRows('Data');
+
+
+//Now we have to check each position and move it as close to the front as possible
+for i = 1 to $(vTotalAmountOfBlocks)
+
+	let vPositionOfCheckedBlock = $(vTotalAmountOfBlocks)-$(i)+1;
+
+	Trace Checking Block $(i) (Helper = $(vHelper));
+
+	//We need to now the length of the block that we want to move to the front
+    InfosOfCheckedBlock:
+    load
+        LengthOfBlock,
+        FileID
+    Resident Data
+    where
+    	Position_Original = $(vPositionOfCheckedBlock)
+        and Type = 'file';
+
+    
+    if NoOfRows('InfosOfCheckedBlock') = 1 then
+        
+    
+	    let vLengthOfCheckedBlock = peek('LengthOfBlock');
+	    let vFileIDOfCheckedBlock = peek('FileID');
+        
+	    
+	    //We need to find the position closest to the front where this block fits in.
+	    NewPosition:
+	    Load
+	    	min(Position) as NewPosition
+	    Resident Data
+	    where
+	    	LengthOfBlock >= $(vLengthOfCheckedBlock)
+	        AND Type = 'free'
+            AND Position <= $(vPositionOfCheckedBlock)
+	    group by;
+	    
+	    let vNewPosition = peek('NewPosition');
+        
+     
+	    
+	    //If there is a possible position, we move the block there.
+	    //If not we do nothing.
+	    if NoOfRows('NewPosition') = 1 then
+	    	    
+	      	InfosOfNewPosition:
+	        Load
+	            LengthOfBlock
+	        Resident Data
+	        where Position = $(vNewPosition);
+	
+			let vLengthOfNewPosition = peek('LengthOfBlock');
+			drop table InfosOfNewPosition;          
+	        
+	        
+	        //remove current data set at new position and position of checked block
+	        Data2:
+	        NoConcatenate
+	        load * Resident Data
+	        where
+	        	    Position <> $(vNewPosition)
+	            AND Position_Original <> $(vPositionOfCheckedBlock)
+	        ;
+	        
+	        drop table Data;
+	        Rename Table Data2 to Data;
+	        
+	        
+	        //Add free data to position of checked block
+	        Concatenate(Data)
+	        load
+	        	$(vPositionOfCheckedBlock) as Position,
+	            'free' as Type,
+	            null() as FileID,
+                null() as Position_Original,
+	            $(vLengthOfCheckedBlock) as LengthOfBlock
+	        AutoGenerate 1;
+	        
+	        
+	        //Add new data to new position
+	        if $(vLengthOfNewPosition) = $(vLengthOfCheckedBlock) then
+	        
+	        	Concatenate(Data)
+	        	load
+	        		$(vNewPosition) as Position,
+	        	    'file' as Type,
+	        	    $(vFileIDOfCheckedBlock) as FileID,
+                	null() as Position_Original,
+	        	    $(vLengthOfCheckedBlock) as LengthOfBlock
+	        	AutoGenerate 1;
+	            
+	        else
+	        
+	        	Concatenate(Data)
+	        	load
+	        		$(vNewPosition) as Position,
+	        	    'file' as Type,
+	        	    $(vFileIDOfCheckedBlock) as FileID,
+                	null() as Position_Original,
+	        	    $(vLengthOfCheckedBlock) as LengthOfBlock
+	        	AutoGenerate 1;   
+	            
+	            
+	        	Concatenate(Data)
+	        	load
+	        		$(vNewPosition) + 0.5 as Position,
+	        	    'free' as Type,
+	        	    null() as FileID,
+                	null() as Position_Original,
+	        	    $(vLengthOfNewPosition) - $(vLengthOfCheckedBlock) as LengthOfBlock
+	        	AutoGenerate 1;
+                
+	        endif;
+
+
+	        //If the lenght of the new block was shorter than the free space and we had to split the block,
+	        //we have to re-order the table and re-create the positions
+            Data2:
+            NoConcatenate
+            Load
+            	RowNo() as Position,
+                Type,
+                FileID,
+                Position_Original,
+                LengthOfBlock
+            Resident Data
+            order by Position asc;
+            
+            drop table Data;
+            Rename table Data2 to Data;
+                
+                           
+            
+            //We need to check if by moving a block we have now multiple free-blocks in a row. if yes, we have to combine them to one block
+            Data2:
+            NoConcatenate
+            Load
+            	if(Type = 'free' AND peek('Type') = 'free', peek('Position'), Position) as Position,
+            	Type,
+                FileID,
+                Position_Original,
+                LengthOfBlock
+            Resident Data;
+            
+            drop Table Data;
+               
+       
+            
+            Data3:
+            Load
+            	rowno() as Position_New,
+            	Position,
+                only(FileID) as FileID,
+                only(Type) as Type,
+                min(Position_Original) as Position_Original,
+	        	sum(LengthOfBlock) as LengthOfBlock
+            Resident Data2
+            group by Position;
+            
+            Drop table Data2;
+            rename Table Data3 to Data;
+            drop field Position;
+            Rename field Position_New to Position;
+            
+	    
+	    endif;
+	
+    	drop table NewPosition;
+    
+    endif;
+    
+	drop table InfosOfCheckedBlock;      
+   
+    
+
+next i;
+
+
+//Sorting is done now, so we can use the code of Part 1 to actually build up the repetitions and calculate the checksum
+
+
+//Now we need to add the correct amount of "free" or "file"
+//We do this in a two step approach. We add it per line separated by a delimiter and use the qlik subfield() function by splitting it in the next step and by that creating new lines.
+//First Step
+Data2:
+load
+	*,
+    if(
+    	Type = 'free'
+        ,
+        Repeat('.,',LengthOfBlock)
+        ,
+        Repeat(FileID & ',',LengthOfBlock)
+   ) as Block
+Resident Data;
+
+drop table Data;
+
+
+//Second Step
+Data3:
+load
+    SubField(Block,',') as Block
+Resident Data2;
+
+drop table Data2;
+
+
+//We have now generated some empty lines that we need to eliminate
+AllBlocks:
+load
+	rowno() as Position,		//We generate a new unique position for each of the new generated lines.
+	Block
+Resident Data3
+where len(Block) > 0;
+
+drop table Data3;
+
+
+//Calculating the Results
+PreResult:
+load
+	if(
+    	IsNum(Block)
+        ,
+        (Position-1) * Block //-1 because the rules of the task say that we start at 0
+        ,
+        0
+    ) as Value
+Resident AllBlocks;
+
+drop table AllBlocks;
+
+
+
+//Results
+Result:
+Load
+	sum(Value) as Result
+Resident PreResult
+group by;
+
+drop table PreResult;
