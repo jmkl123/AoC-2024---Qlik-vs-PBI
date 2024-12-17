@@ -1,0 +1,51 @@
+//Input
+Input:
+LOAD
+    "@1:n" AS Input
+FROM [lib://AoC/Day11/Input.txt]
+(fix, utf8, no labels);
+
+
+//We convert the every stone into a single row:
+Data:
+load
+	subfield(Input,' ') as Value
+Resident Input;
+
+drop table Input;
+
+
+
+//Blinking Process starts here
+for i = 1 to 25
+	Data2:
+	NoConcatenate
+	Load
+		if(
+	    	Value = 0
+	        ,
+	        1
+	        ,
+	        if(
+	        	even(len(Value))
+	            ,
+	            left(Value,len(Value)/2) & ';' & right(Value,len(Value)/2)
+	            ,
+	            Value * 2024
+	    )	) as Value
+	Resident Data;
+	
+	drop table Data;
+	
+	
+	//Now we have to perform the splitting by using subfield
+	Data3:
+	NoConcatenate
+	Load
+		floor(subfield(Value,';')) as Value //I am not 100% sure why, but floor() is necessary here. My theory is that without it Qlik uses Exponential number system which causes false results for the rule 2 (splitting). Floor is probably forcing Qlik to use the integer representation of the number. - But I have not done any investigations to proof my theory.
+	Resident Data2;
+	
+	drop table Data2;
+	Rename Table Data3 to Data;
+    
+next i;
