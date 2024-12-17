@@ -1,0 +1,165 @@
+//Hint: The code for Part 2 is almost the same as Part 1 it only changes at the end
+
+//Input
+Input:
+LOAD
+    RowNo() as Y,
+    @1 as Input
+FROM [lib://AoC/Day10/Input.txt]
+(txt, utf8, no labels, delimiter is ';', msq);
+
+let vWidth = len(peek('Input'));
+let vHeight = peek('Y');
+
+
+
+//We want to have one line per number incl. the XY-Coordinates of the number
+For i = 1 to $(vWidth)
+
+	Data:
+    load
+    	Y,
+        $(i) as X,
+        $(i) & '_' & Y as XY,
+    	mid(Input,$(i),1) as Value
+    Resident Input;
+
+next i;
+
+drop table Input;
+
+
+
+//Now we add all possible neighors to each field
+//UP
+AllNeighbors:
+Load
+	Y,
+    X,
+    XY,
+    Value,
+    X as Neighbor_X,
+    Y-1 as Neighbor_Y,
+    X & '_' & (Y-1) as Neighbor_XY,
+    'up' as Direction
+Resident Data;
+    
+    
+//DOWN
+Concatenate(AllNeighbors)
+Load
+	Y,
+    X,
+    XY,
+    Value,
+    X as Neighbor_X,
+    Y+1 as Neighbor_Y,
+    X & '_' & (Y+1) as Neighbor_XY,
+    'down' as Direction
+Resident Data;
+    
+    
+//LEFT
+Concatenate(AllNeighbors)
+Load
+	Y,
+    X,
+    XY,
+    Value,
+    X-1 as Neighbor_X,
+    Y as Neighbor_Y,
+    (X-1) & '_' & Y as Neighbor_XY,
+    'left' as Direction
+Resident Data;
+    
+    
+//RIGHT
+Concatenate(AllNeighbors)
+Load
+	Y,
+    X,
+    XY,
+    Value,
+    X+1 as Neighbor_X,
+    Y as Neighbor_Y,
+    (X+1) & '_' & Y as Neighbor_XY,
+    'right' as Direction
+Resident Data;
+
+drop table Data;
+   
+  
+//We will only keep neighbors that are within the borders of the field:
+PossibleNeighbors:
+NoConcatenate load * Resident AllNeighbors
+where
+	Neighbor_X > 0
+    AND Neighbor_X <= $(vWidth)
+    AND Neighbor_Y > 0
+    AND Neighbor_Y <= $(vHeight);
+    
+drop table AllNeighbors;
+
+
+    
+
+//Now we generate all possible trails
+PossibleTrails:
+load
+	XY as Step_0_XY,
+    Neighbor_XY as Step_1_Possible_XY
+Resident PossibleNeighbors
+where Value = 0;
+
+
+
+for i = 1 to 9
+
+	let vNextStep = $(i)+1;
+
+	left join(PossibleTrails)
+    load    
+    	XY as Step_$(i)_Possible_XY,
+        XY as Step_$(i)_XY,
+    	Neighbor_XY as Step_$(vNextStep)_Possible_XY
+	Resident PossibleNeighbors
+	where Value = $(i);
+
+next i;
+
+
+drop table PossibleNeighbors;
+
+
+
+//Not all trails lead to 9. we only keep trails that lead to 9
+//Furthermore it happens (I am not sure why, and have not done any investigations), that some trails appear more the once. We only want to have each version of each trail once
+DistinctValidTrails:
+load Distinct
+	Step_0_XY,
+	Step_1_XY,
+	Step_2_XY,
+	Step_3_XY,
+	Step_4_XY,
+	Step_5_XY,
+	Step_6_XY,
+	Step_7_XY,
+	Step_8_XY,
+	Step_9_XY
+Resident PossibleTrails
+where not isnull(Step_9_XY);
+
+drop table PossibleTrails;
+
+
+//Results
+Results:
+Load
+	count(Step_0_XY) as Result
+Resident DistinctValidTrails
+group by;
+
+drop table DistinctValidTrails;
+	
+
+
