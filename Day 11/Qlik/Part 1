@@ -49,3 +49,14 @@ for i = 1 to 25
 	Rename Table Data3 to Data;
     
 next i;
+
+
+
+//Result:
+Result:
+load
+	count(Value) as Result
+Resident Data
+group by;
+
+drop table Data;
