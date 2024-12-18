@@ -1,0 +1,85 @@
+//HINT: In theory we could use the Script from Part 1 and just let it run more iterations.
+//But we have a exponential growth and after step 41 we alread get 100 Mio Rows.
+
+//Therefore we choose a different approach: We will count the distinct stones every step, and group them,
+//because the order of the stones does not matter.
+
+//Input
+Input:
+LOAD
+    "@1:n" AS Input
+FROM [lib://AoC/Day11/Input.txt]
+(fix, utf8, no labels);
+
+
+//We convert the every stone into a single row:
+Data:
+load
+	1 as Amount,
+    subfield(Input,' ') as Value
+Resident Input;
+
+drop table Input;
+
+
+
+//Blinking Process starts here
+for i = 1 to 75
+
+	Trace Blink: $(i);    
+    
+	Data2:
+	NoConcatenate
+	Load
+    	Amount,
+		if(
+	    	Value = 0
+	        ,
+	        1
+	        ,
+	        if(
+	        	even(len(Value))
+	            ,
+	            left(Value,len(Value)/2) & ';' & right(Value,len(Value)/2)
+	            ,
+	            Value * 2024
+	    )	) as Value
+	Resident Data;
+	
+	drop table Data;
+	
+	
+	//Now we have to perform the splitting by using subfield
+	Data3:
+	NoConcatenate
+	Load
+    	Amount,
+		floor(subfield(Value,';')) as Value //I am not 100% sure why, but floor() is necessary here. My theory is that without it Qlik uses Exponential number system which causes false results for the rule 2 (splitting). Floor is probably forcing Qlik to use the integer representation of the number. - But I have not done any investigations to proof my theory.
+	Resident Data2;
+	
+	drop table Data2;
+    
+    
+    Data4:
+    NoConcatenate
+    load
+    	sum(Amount) as Amount,
+        Value
+    Resident Data3
+    group by Value;
+    
+    drop table Data3;
+	Rename Table Data4 to Data;
+    
+next i;
+
+
+
+//Result:
+Result:
+load
+	floor(sum(Amount)) as Result //We use floor again to convert the exponential value to integer so we can read the correct value from the datamode.
+Resident Data
+group by;
+
+drop table Data;
