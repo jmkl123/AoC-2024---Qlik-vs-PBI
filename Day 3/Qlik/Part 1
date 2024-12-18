@@ -1,64 +1,64 @@
-// //Import
-// Input:
-// LOAD
-//     @1 as Input
-// FROM [lib://AoC/Day3/Input.txt]
-// (txt, codepage is 28592, no labels, delimiter is '\t', msq);
+//Import
+Input:
+LOAD
+    @1 as Input
+FROM [lib://AoC/Day3/Input.txt]
+(txt, codepage is 28592, no labels, delimiter is '\t', msq);
 
 
 
-// //Split the string to create one line per multiplicatoin
-// OneMulPerLine:
-// load
-// 	subfield(Input,'mul(') as Mul
-// Resident Input;
+//Split the string to create one line per multiplicatoin
+OneMulPerLine:
+load
+	subfield(Input,'mul(') as Mul
+Resident Input;
 
-// drop table Input;
+drop table Input;
 
-// //You need to know, that if you omit the third parameter of the subfield expression, qlik keeps all the subfields and generates one new line per subfield
-// //With this approach we can be sure, that every line has (better said: had) the correct 'mul(' start.
-
-
-
-// //Next we only need to keep the part that is in front of the first ')' occurance
-// BeforeBracket:
-// load
-// 	subfield(Mul,')',1) as InnerPart //this time we need the third parameter to only keep the first subfield and not generate new lines
-// Resident OneMulPerLine;
-
-// drop table OneMulPerLine;
+//You need to know, that if you omit the third parameter of the subfield expression, qlik keeps all the subfields and generates one new line per subfield
+//With this approach we can be sure, that every line has (better said: had) the correct 'mul(' start.
 
 
 
-// //now we only want to keep data that has only numbers and a coma:
-// Innerpart_ValidChars:
-// Load
-// 	InnerPart as InnerPart_ValidChars
-// Resident BeforeBracket
-// where len(InnerPart) = len(keepchar(InnerPart,'0123456789,'));
+//Next we only need to keep the part that is in front of the first ')' occurance
+BeforeBracket:
+load
+	subfield(Mul,')',1) as InnerPart //this time we need the third parameter to only keep the first subfield and not generate new lines
+Resident OneMulPerLine;
 
-// drop table BeforeBracket;
+drop table OneMulPerLine;
 
 
-// //now we have to multiply all pairs, that match the rule of maximum 3 digits per number:
-// ResultPerMul:
-// load
-// 	subfield(InnerPart_ValidChars,',',1) * subfield(InnerPart_ValidChars,',',2) as MulResult
-// Resident Innerpart_ValidChars
-// where
-// 	len(subfield(InnerPart_ValidChars,',',1)) <= 3
-// 	AND len(subfield(InnerPart_ValidChars,',',2)) <= 3;
+
+//now we only want to keep data that has only numbers and a coma:
+Innerpart_ValidChars:
+Load
+	InnerPart as InnerPart_ValidChars
+Resident BeforeBracket
+where len(InnerPart) = len(keepchar(InnerPart,'0123456789,'));
+
+drop table BeforeBracket;
+
+
+//now we have to multiply all pairs, that match the rule of maximum 3 digits per number:
+ResultPerMul:
+load
+	subfield(InnerPart_ValidChars,',',1) * subfield(InnerPart_ValidChars,',',2) as MulResult
+Resident Innerpart_ValidChars
+where
+	len(subfield(InnerPart_ValidChars,',',1)) <= 3
+	AND len(subfield(InnerPart_ValidChars,',',2)) <= 3;
     
-// drop table Innerpart_ValidChars;
+drop table Innerpart_ValidChars;
     
 
     
     
-// //Once again we could now sum it up in the frontend, but we will use aggregate to get the result in the model
-// Results:
-// load
-// 	sum(MulResult) as Result
-// Resident ResultPerMul
-// Group by;
+//Once again we could now sum it up in the frontend, but we will use aggregate to get the result in the model
+Results:
+load
+	sum(MulResult) as Result
+Resident ResultPerMul
+Group by;
 
-// drop Table ResultPerMul;
+drop Table ResultPerMul;
